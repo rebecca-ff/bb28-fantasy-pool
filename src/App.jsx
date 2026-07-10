@@ -50,6 +50,38 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$
 
 const emptySheet = () => ({ pre: {}, weeks: {} });
 
+// Header live-status: is a BB episode airing right now, or are the 24/7 live
+// feeds on? Based on the CBS broadcast schedule in US Eastern time. Episodes
+// air Sun & Wed 8:00pm and the Thu 8:00pm live eviction; feeds run the rest of
+// the time. Tweak EPISODE_WINDOWS (minutes-from-midnight ET) if it changes.
+const EPISODE_WINDOWS = {
+  Sun: [[20 * 60, 21 * 60]], // Sunday 8:00–9:00pm ET
+  Wed: [[20 * 60, 21 * 60 + 30]], // Wednesday 8:00–9:30pm ET
+  Thu: [[20 * 60, 21 * 60]], // Thursday live eviction 8:00–9:00pm ET
+};
+
+const getLinkStatus = () => {
+  let wd, mins;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+    wd = p.weekday;
+    mins = (parseInt(p.hour, 10) % 24) * 60 + parseInt(p.minute, 10);
+  } catch (e) {
+    return { label: "LIVE FEEDS ON", color: "#5CE1B9" };
+  }
+  const live = (EPISODE_WINDOWS[wd] || []).some(([a, b]) => mins >= a && mins < b);
+  return live
+    ? { label: "EPISODE LIVE", color: "#FF5CA8" }
+    : { label: "LIVE FEEDS ON", color: "#5CE1B9" };
+};
+
 const scoreOf = (sheet, results) => {
   let pre = 0, weekly = 0;
   const rp = results.pre || {}, sp = sheet.pre || {};
@@ -173,6 +205,7 @@ export default function App() {
   const [pendingImg, setPendingImg] = useState(null); // File
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState(null);
+  const [, setTick] = useState(0); // ticks each minute to refresh live status
 
   const loadShared = async () => {
     try {
@@ -198,6 +231,12 @@ export default function App() {
       await loadShared();
       setLoaded(true);
     })();
+  }, []);
+
+  // Keep the header live-status (episode live / feeds on) current.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(id);
   }, []);
 
   const join = async () => {
@@ -376,9 +415,19 @@ export default function App() {
           <h1 className="glow-amber" style={{ ...S.orb, fontWeight: 800, fontSize: 28, margin: 0, color: "#FFC24B", letterSpacing: "0.06em" }}>
             BIG BROTHER
           </h1>
-          <div style={{ ...S.orb, fontSize: 9, letterSpacing: "0.25em", color: "#5CE1B9", marginTop: 8 }}>
-            <span className="pulse-dot" aria-hidden="true" />TEMPORAL LINK ONLINE
-          </div>
+          {(() => {
+            const s = getLinkStatus();
+            return (
+              <div style={{ ...S.orb, fontSize: 9, letterSpacing: "0.25em", color: s.color, marginTop: 8 }}>
+                <span
+                  className="pulse-dot"
+                  aria-hidden="true"
+                  style={{ background: s.color, boxShadow: `0 0 8px ${s.color}` }}
+                />
+                {s.label}
+              </div>
+            );
+          })()}
         </div>
 
         {!me ? (
