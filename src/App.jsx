@@ -19,8 +19,11 @@ const CAST = [
   { id: "rome", name: "Rome Seymour", sub: "Pickleball Coach" },
   { id: "taylor", name: "Taylor Brown", sub: "27 · Newbie" },
   { id: "yash", name: "Yash Patel", sub: "Newbie" },
+  { id: "dee", name: "Dee", sub: "New Houseguest" },
 ];
 const byId = Object.fromEntries(CAST.map((p) => [p.id, p]));
+// Bump this id for any new pool-wide announcement; it shows once per device.
+const ANNOUNCE_ID = "dee-joined";
 const NUM_WEEKS = 12;
 
 // ——— Scoring (modeled on classic BB pool formats) ———
@@ -139,7 +142,7 @@ function Chip({ p, selected, correct, wrong, disabled, onClick, accent }) {
         textDecoration: disabled ? "line-through" : "none",
       }}
     >
-      {p.name.split(" ")[0]} {p.name.split(" ")[1]?.[0] || ""}.
+      {p.name.split(" ")[1] ? `${p.name.split(" ")[0]} ${p.name.split(" ")[1][0]}.` : p.name.split(" ")[0]}
       {correct && <span style={{ marginLeft: 4 }}>✓</span>}
       {wrong && <span style={{ marginLeft: 4 }}>✗</span>}
     </button>
@@ -206,6 +209,12 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState(null);
   const [, setTick] = useState(0); // ticks each minute to refresh live status
+  const [showAnnounce, setShowAnnounce] = useState(false);
+
+  const dismissAnnounce = () => {
+    storage.setLocal("bb28-pool-announce-seen", ANNOUNCE_ID);
+    setShowAnnounce(false);
+  };
 
   const loadShared = async () => {
     try {
@@ -227,6 +236,9 @@ export default function App() {
           const rec = await storage.get(`bb28-pool-player:${m.id}`);
           if (rec) setSheet({ pre: rec.pre || {}, weeks: rec.weeks || {} });
         } catch (e) {}
+        // Returning player who hasn't seen the new-houseguest notice yet.
+        if (storage.getLocal("bb28-pool-announce-seen") !== ANNOUNCE_ID)
+          setShowAnnounce(true);
       }
       await loadShared();
       setLoaded(true);
@@ -406,6 +418,32 @@ export default function App() {
       <div className="bg-grid" aria-hidden="true" />
       <div className="bg-stars" aria-hidden="true" />
       <div className="bg-scanlines" aria-hidden="true" />
+
+      {showAnnounce && (
+        <div
+          onClick={dismissAnnounce}
+          style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(8,7,22,.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ ...S.card, maxWidth: 420, width: "100%", padding: 24, textAlign: "center", boxShadow: "0 0 44px rgba(255,92,168,.28)" }}
+          >
+            <div style={{ ...S.orb, fontSize: 11, letterSpacing: "0.3em", color: "#FF5CA8", marginBottom: 10 }}>◆ NEW HOUSEGUEST ◆</div>
+            <div className="glow-amber" style={{ ...S.orb, fontSize: 20, color: "#FFC24B", marginBottom: 12, letterSpacing: "0.04em" }}>DEE HAS ENTERED THE HOUSE</div>
+            <p style={{ fontSize: 14, color: "#C9CEDA", lineHeight: 1.6, marginTop: 0 }}>
+              A new houseguest just joined Season 28 and she&rsquo;s now on the board. Head back to your{" "}
+              <span style={{ color: "#FF5CA8", fontWeight: 700 }}>Pre-Season</span> and{" "}
+              <span style={{ color: "#FF5CA8", fontWeight: 700 }}>Weekly</span> picks to update your selections.
+            </p>
+            <button
+              onClick={() => { setView("pre"); dismissAnnounce(); }}
+              style={{ ...S.pinkBtn, width: "100%", marginTop: 16, padding: 12 }}
+            >
+              UPDATE MY PICKS →
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 16px 48px", position: "relative", zIndex: 1 }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
